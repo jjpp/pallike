@@ -1,0 +1,116 @@
+<matchmbm timestamp="2010-06-15T15:42:01.9503309+01:00" mbmValid="1">
+  <settings>
+    <tracking>true</tracking>
+    <motm>false</motm>
+    <event>10</event>
+  </settings>
+  <matchinfo>
+    <match code="300061489" status="1" day="15" month="june" year="2010" time="16:00" dayweek="" date="Tuesday 15 June 2010 - 16:00">
+      <round code="249722" name="First stage" />
+      <group code="249729">Group G</group>
+      <attendance>
+      </attendance>
+      <pconditions>S</pconditions>
+      <wconditions code="8" humidity="71" wind="12.5" temperature="12">SUN</wconditions>
+      <team team="home" code="43854" countrycode="civ" shortname="CIV" name="Côte d'Ivoire" color="D07326" kit="1" ncolor="0     ">
+        <scorers />
+      </team>
+      <team team="away" code="43963" countrycode="por" shortname="POR" name="Portugal" color="750D14" kit="2" ncolor="000000">
+        <scorers />
+      </team>
+      <score>0:0</score>
+      <time min="43" sec="">43' </time>
+      <descr>
+      </descr>
+      <stadium code="5007768">Port Elizabeth Stadium</stadium>
+      <city>Nelson Mandela Bay/Port Elizabeth </city>
+      <aggregate>
+      </aggregate>
+      <winteam>
+      </winteam>
+      <penalties>
+      </penalties>
+      <reason>
+      </reason>
+      <maxphase numPlayedPhases="1" live="1">
+      </maxphase>
+    </match>
+  </matchinfo>
+  <feeds polling="true">
+    <feed type="matchPeople" timestamp="20100615152723" />
+    <feed type="allMatchEvents" timestamp="20100615154201" />
+    <feed type="stats" timestamp="20100615154201" />
+    <feed type="head2head" timestamp="20100615152724" />
+    <feed type="squadlist" timestamp="20100615132410" />
+    <feed type="matchBrowser" timestamp="20100615150012" />
+    <feed type="liveStandings" timestamp="20100615150012" />
+    <feed type="trackingTCT" timestamp="" />
+    <feed type="trackingL2S" timestamp="20100615154131" />
+    <feed type="trackingPHZ" timestamp="" />
+    <feed type="trackingData" timestamp="20100615154201" />
+    <feed type="trackingBHZ" timestamp="20100615154132" />
+  </feeds>
+  <allevents>
+    <e id="29149410" code="21" t_id="43854" t_idTo="43963" ph="1" min="42" sec="0" phmin="42" timedisplay="42' ">
+      <descr>It's all become a bit scrappy at the moment. Is fear of defeat greater than desire for victory at this stage of the competition? Both sides here certainly seem to be affording the other a great deal of respect.</descr>
+    </e>
+    <e id="29149220" code="11" t_id="43963" pl_id="210229" pl_idTo="198051" t_idTo="43854" x="437" y="874" fz="MD" ph="1" min="40" sec="40" phmin="41" timedisplay="41' " tag="mbm_foul2" />
+    <e id="29149040" code="11" t_id="43963" pl_id="210214" pl_idTo="213910" t_idTo="43854" x="512" y="102" fz="MA" ph="1" min="39" sec="54" phmin="40" timedisplay="40' " tag="mbm_foul1" />
+    <e id="29148910" code="55" st="G" t_id="43854" pl_id="213910" pl_idTo="210229" t_idTo="43963" x="474" y="812" fz="MD" ph="1" min="38" sec="5" phmin="39" timedisplay="39' " />
+    <e id="29148440" code="11" t_id="43963" pl_id="269784" pl_idTo="176984" t_idTo="43854" x="637" y="51" fz="MA" ph="1" min="36" sec="25" phmin="37" timedisplay="37' " tag="mbm_foul3" />
+    <e id="29148020" code="21" t_id="43854" t_idTo="43963" ph="1" min="35" sec="0" phmin="35" timedisplay="35' ">
+      <descr>Chances are few and far between, but there is no shortage of quality out there. This looks to be one of the most evenly-matched games we have seen so far, although Ronaldo looks the most likely player to make something happen.</descr>
+    </e>
+    <e id="29147750" code="11" t_id="43854" pl_id="3355" pl_idTo="201200" t_idTo="43963" x="460" y="205" fz="MD" ph="1" min="32" sec="57" phmin="33" timedisplay="33' " tag="mbm_foul2" />
+    <e id="29147460" code="11" t_id="43854" pl_id="291329" pl_idTo="199026" t_idTo="43963" x="654" y="287" fz="MA" ph="1" min="31" sec="59" phmin="32" timedisplay="32' " tag="mbm_foul1" />
+    <e id="29147290" />
+    <e id="29146950" />
+    <e id="29146660" />
+    <e id="29146770" />
+    <e id="29146190" />
+    <e id="29146420" />
+    <e id="29145890" />
+    <e id="29146180" />
+    <e id="29145930" />
+    <e id="29145900" />
+    <e id="29145880" />
+    <e id="29145770" />
+    <e id="29145410" />
+    <e id="29145460" />
+    <e id="29145420" />
+    <e id="29144880" />
+    <e id="29144620" />
+    <e id="29144380" />
+    <e id="29143940" />
+    <e id="29144180" />
+    <e id="29143970" />
+    <e id="29143730" />
+    <e id="29143770" />
+    <e id="29143670" />
+    <e id="29143450" />
+    <e id="29143370" />
+    <e id="29143140" />
+    <e id="29143090" />
+    <e id="29142520" />
+    <e id="29142900" />
+    <e id="29142300" />
+    <e id="29142170" />
+    <e id="29142120" />
+    <e id="29142090" />
+    <e id="29141950" />
+    <e id="29141910" />
+    <e id="29141890" />
+    <e id="29141840" />
+    <e id="29141780" />
+    <e id="29141760" />
+    <e id="29141700" />
+    <e id="29141560" />
+    <e id="29140970" />
+    <e id="29140720" />
+    <e id="29139850" />
+    <e id="29139660" />
+    <e id="29139290" />
+    <e id="29138960" />
+    <e id="29138640" />
+  </allevents>
+</matchmbm>
