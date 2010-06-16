@@ -1,4 +1,7 @@
-#!/usr/bin/perl
+#!/usr/bin/perl 
+#-w
+
+# pallike (c) copyright jaak pruulmann-vengerfeldt, 2004, 2010. all rights reserved.
 
 use threads;
 use threads::shared;
@@ -15,22 +18,7 @@ $ua = LWP::UserAgent->new;
 $parser = new XML::Parser(Style => 'Tree');
 
 use vars qw{ $info $events $stats @games %next @news $quit @local_news %channels @bcast $state $seis %topic %smslist $topiccmd };
-use vars qw{ $last_update $last_irc $updater $irc_thread };
-
-$info = &share({});
-$events = &share({});
-$stats = &share({});
-%next = ();
-@games = (1059164 .. 1059194);
-@news = ();
-@bcast = ();
-@local_news = ();
-$seis = 0;
-%topic = ();
-$topiccmd = 0;
-%smslist = ();
-
-$quit = 0;
+use vars qw{ $last_update $last_irc $updater $irc_thread %req $last_save};
 
 share(@games);
 share(@news);
@@ -41,19 +29,39 @@ share(%smslist);
 share($seis);
 share($last_update);
 share($last_irc);
+share %next;
+
+$info = &share({});
+$events = &share({});
+$stats = &share({});
+%next = ();
+@games = (300061449 .. 300061495, 300111111 .. 300111117);
+@news = ();
+@bcast = ();
+@local_news = ();
+$seis = 0;
+%topic = ();
+$topiccmd = 0;
+%smslist = ();
+
+$quit = 0;
 
 $last_update = 0; 
 $last_irc = 0;
 
 $| = 1;
 
+
 if (-r 'pallike.state') {
 	require 'pallike.state';
 }
 
-share %next;
-share @games;
 # $info = &share($info);
+
+my %feeds = (
+	'stats' => \&fetch_stats,
+	'allMatchEvents' => \&fetch_events,
+);
 
 
 $SIG{'INT'} = sub { $quit ++ };
@@ -210,28 +218,28 @@ sub matchday {
 	my $date = shift;
 	my $game = shift;
 
-	return 17 if ($game eq 1059192);
-	return 18 if ($game eq 1059193);
-	return 19 if ($game eq 1059194);
+#	return 17 if ($game eq 1059192);
+#	return 18 if ($game eq 1059193);
+#	return 19 if ($game eq 1059194);
 
-	return ($date ? $date - 20040611 : 5);
+	return $date > 20100630 ? $date - 20100700 + 20 : $date - 20100610;
 }
 
 sub update_thread {
 	$SIG{'INT'} = sub { $quit ++ };
 
-	my %req = map { 
-		my $url = 'http://cd.uefa.com/live/competitions/euro/' .
-			'matchcentrelight/matchday=' .
+	%req = map { 
+		my $url = 'http://www.fifa.com/live/Competitions/worldcup/' .
+			'matchcentrelight/MatchDay=' .
 			matchday($info->{$_}->{date}, $_) .
-			'/day=1/match=' . $_ . '/allevents.html';
+			'/Day=1/Match=' . $_ . '/';
 		print STDERR "$_: $url\n";
 	
-		$_ => HTTP::Request->new(GET => $url);
+		$_ => $url;
 	} @games;
 	my @queue = keys %req;
 	my %last_size = ();
-	my $last_save = 0;
+	$last_save = 0;
 
 	print "There is " . scalar(@queue) . " requests in queue\n";
 	while (!$quit) {
@@ -240,7 +248,7 @@ sub update_thread {
 			sort { $next{$a} <=> $next{$b} } 
 				(grep { $next{$_} ne 'never' } (keys %req));
 
-#		print join(", ", map { "$_: " . ($next{$_} - time) } @queue) . "\n";
+#		print "queue: ". join(", ", map { "$_: " . ($next{$_} - time) } @queue) . "\n";
 
 		my $req = shift @queue;
 		next if $next{$req} eq 'never';
@@ -254,12 +262,14 @@ sub update_thread {
 		next if (time < $next{$req});
 		next unless defined($req{$req});
 		
-		my $response = $ua -> request($req{$req});
+		my $uri;
+		my $response = $ua -> request(HTTP::Request->new(GET =>
+			$uri = $req{$req} . 'matchIndex.xml?ign=' . $info -> {$req} -> {'last_update'}));
 		if ($response -> is_success) {
-			if (length($response -> content) != $last_size{$req}) {
-				$last_size{$req} = length($response -> content);
-				print "Got " . length($response -> content) . " bytes from $req\n";
-			}
+#			if (length($response -> content) != $last_size{$req}) {
+#				$last_size{$req} = length($response -> content);
+#				print "Got " . length($response -> content) . " bytes from $req\n";
+#			}
 			parse_xml($response->content);
 			save_state(1);
 			if (time < $last_save + 1200) {
@@ -267,7 +277,7 @@ sub update_thread {
 				$last_save = time();
 			}
 		} else {
-			print STDERR $response->status_line, "\n";
+			print STDERR "$uri: ", $response->status_line, "\n";
 		}
 
 		threads->yield();
@@ -283,14 +293,19 @@ sub get_games_real {
 	my $fut = 0;
 
 	my %groups = (
-		'A' => 'POR_ESP_GRE_RUS',
-		'B' => 'FRA_ENG_SUI_CRO',
-		'C' => 'SWE_BUL_DEN_ITA',
-		'D' => 'CZE_GER_HOL_LAT',
+		'A' => 'RSA_URU_MEX_FRA',
+		'B' => 'ARG_KOR_GRE_NGA',
+		'C' => 'ENG_ALG_SVN_USA',
+		'D' => 'GER_SRB_AUS_GHA',
+		'E' => 'NED_JPN_DEN_CMR',
+		'F' => 'ITA_NZL_SVK_PAR',
+		'G' => 'CIV_POR_BRA_PRK',
+		'H' => 'ESP_SUI_HON_CHI',
 	);
 
+	$arg = '' unless defined($arg);
 	if ($arg =~ /fut./i) {
-	$fut = 1;
+		$fut = 1;
 		$arg =~ s/fut.//;
 	}
 
@@ -345,7 +360,7 @@ sub gamepref {
 sub seis {
 	my $g = shift;
 	return team0($g) . (
-		($info -> {$g} -> {'score'} =~ /\d\d:\d\d/) ? ':' :
+		!defined($info -> {$g} -> {'score'}) ? ':' :
 			' ' . $info -> {$g} -> {'score'} . 
 				($info -> {$g} -> {'penalties'} ? ' (' . $info -> {$g} -> {'penalties'} . ')' : '')
 			. ' ') .
@@ -355,8 +370,8 @@ sub seis {
 
 sub seis_topic {
 	my $g = shift;
-	return ($info -> {$g} -> {'score'} =~ /\d\d:\d\d/) ? 
-		team0($g) . ':' . team1($g) . '@' . fixtime($info -> {$g} -> {'score'}) :
+	return !defined($info -> {$g} -> {'score'})  ? 
+		team0($g) . ':' . team1($g) . '@' . substr($info -> {$g} -> {'time'}, $[, 5) :
 		team0($g) . ' ' . $info -> {$g} -> {'score'} . 
 			($info -> {$g} -> {'penalties'} ? ' (' . $info -> {$g} -> {'penalties'} . ')' : '') .
 		' '.team1($g);
@@ -478,7 +493,7 @@ sub on_msg {
 
 				foreach (@{$info -> {$g} -> {shots}}) {
 					reply  $resp, "$gp: " . $_ -> {'time'} . " " .
-						$_ -> {'player'} . " (" . $_ -> {'team'};
+						$_ -> {'player'} . " (" . $_ -> {'team'} . ")";
 				}
 				
 			}
@@ -498,7 +513,7 @@ sub on_msg {
 			reply $resp, "ok";
 		},
 		'!leave' => sub {
-			$self -> leave($args[0]);
+			$self -> part($args[0]);
 			$channels{$args[0]} = 0;
 		},
 		'!group' => sub {
@@ -506,8 +521,8 @@ sub on_msg {
 			my %goals = ();
 			foreach (get_games(@args)) {
 				print "$_: " . $info -> {$_} -> {score} . "\n";
-				next unless $info -> {$_} -> {score} =~ /^\d+-\d+$/;
-				my @d = split('-', $info -> {$_} -> {score});
+				next unless $info -> {$_} -> {score} =~ /^\d+:\d+$/;
+				my @d = split(':', $info -> {$_} -> {score});
 				print "@d\n";
 				$goals{team0($_)} += $d[0];
 				$goals{team1($_)} += $d[1];
@@ -599,11 +614,53 @@ sub save_state {
 sub parse_xml {
 	my $tree = $parser -> parse(shift);
 
-	#print Dumper($tree) . "\n";
+#	print Dumper($tree) . "\n";
 
-	my $m = parse_matchinfo($tree -> [1] -> [2] -> [4]);
-	parse_events($tree -> [1] -> [4], $m);
-	parse_statistics($tree -> [1] -> [6], $m);
+	my $m = parse_matchinfo(el($tree, 'matchmbm', 'matchinfo', 'match'));
+	my $last_update = $tree -> [1] -> [0] -> {'timestamp'};
+	$last_update =~ tr/T\-:.//d;
+	$last_update = substr($last_update, $[, 14);
+	$last_update--;
+#	print "$m.last_update: $last_update\n";
+	update ($m, 'last_update', $last_update);
+
+	parse_feeds(el($tree, 'matchmbm', 'feeds'), $m);
+#	parse_events(el('matchmbm', 'allevents'), $m);
+#	parse_statistics($ -> [1] -> [6], $m);
+}
+
+sub parse_stats {
+	my $m = shift;
+	my $tree = $parser -> parse(shift);
+
+	parse_statistics(el($tree, 'matchmbm', 'statistics'), $m);
+}
+
+sub parse_allEvents {
+	my $m = shift;
+	my $tree = $parser -> parse(shift);
+
+	parse_events(el($tree, 'matchmbm', 'allevents'), $m);
+}
+
+sub el {
+	my $branch = shift;
+	my $key = shift;
+
+	my $found = 0;
+
+	for (@{$branch}) {
+		next if (ref($_) eq 'HASH');
+		return scalar(@_) > 0 ? el($_, @_) : $_ if $found > 0;
+		if ($found < 0) {
+			$found = 0;
+			next;
+		}
+
+		$found = $_ eq $key ? 1 : -1;
+	}
+
+	return undef;
 }
 
 sub update {
@@ -614,11 +671,19 @@ sub update {
 	my $bcast = shift;
 	my $code = shift;
 
+#	print "update: $match, $key, $val\n";
+
 	if (ref($info -> {$match}) ne 'HASH') {
-		$info -> {$match} = {};
+		my %h :shared;
+		$info -> {$match} = \%h;
 	}
 
-	if ($info -> {$match} -> {$key} ne $val && ($news || $bcast)) {
+	$val = trim($val);
+
+	if (defined($val) 
+		&& (!defined($info -> {$match} -> {$key}) 
+			|| $info -> {$match} -> {$key} ne $val)
+		&& ($news || $bcast)) {
 		##lock @news;
 		if ($news) {
 			push @news, $news;
@@ -649,17 +714,17 @@ sub team1 {
 sub fixtime {
 	$_ = shift;
 
-	s/^(\d+ .... 2004) (..:..)$/$2, $1/;
+	s/^\S+ (\d+ .... 2010) - (..:..)$/$2, $1/;
 
-	s/^22:/24:/;
-	s/^21:/23:/;
-	s/^20:/22:/;
-	s/^19:/21:/;
-	s/^18:/20:/;
-	s/^17:/19:/;
-	s/^16:/18:/;
-	s/^15:/17:/;
-	s/^14:/16:/;
+	s/^22:/23:/;
+	s/^21:/22:/;
+	s/^20:/21:/;
+	s/^19:/20:/;
+	s/^18:/19:/;
+	s/^17:/18:/;
+	s/^16:/17:/;
+	s/^15:/16:/;
+	s/^14:/15:/;
 
 	$_;
 }
@@ -688,14 +753,16 @@ sub parse_matchinfo {
 	my $x = 0;
 	my %match = map { s/^team$/team_$x/ && $x++; $_ } @{$mi}[1 .. $#{$mi}];
 
-	update($m, 'temperature', $match{'temperature'} -> [2], 
-		gamepref($m) . " Temperatuur: $match{'temperature'}->[2] kraadi");
+	my %weather = %{$match{'wconditions'} -> [0]};
+
+	update($m, 'temperature', $weather{'temperature'}, 
+		gamepref($m) . " Temperatuur: $weather{'temperature'} kraadi");
 		
-	update($m, 'wind', $match{'wind'} -> [2], 
-		gamepref($m) . " Tuule kiirus: $match{'wind'}->[2] m/s");
+	update($m, 'wind', $weather{'wind'}, 
+		gamepref($m) . " Tuule kiirus: $weather{'wind'} m/s");
 		
-	update($m, 'humidity', $match{'humidity'} -> [2], 
-		gamepref($m) . " Õhuniiskus: $match{'humidity'}->[2]%");
+	update($m, 'humidity', $weather{'humidity'}, 
+		gamepref($m) . " Õhuniiskus: $weather{'humidity'}%");
 		
 	update($m, 'wconditions', $match{'wconditions'} -> [2], 
 		gamepref($m) . " Ilm: $match{'wconditions'}->[2]");
@@ -703,25 +770,31 @@ sub parse_matchinfo {
 	update($m, 'pconditions', $match{'pconditions'} -> [2], 
 		gamepref($m) . " Plats: $match{'pconditions'}->[2]");
 		
-	update($m, 'team0', $match{'team_0'} -> [0] -> {countrycode}, undef);
+	update($m, 'team0', uc($match{'team_0'} -> [0] -> {countrycode}), undef);
 	update($m, 'team0long', $match{'team_0'} -> [0] -> {name}, undef);
-	update($m, 'team1', $match{'team_1'} -> [0] -> {countrycode}, undef);
+	update($m, 'team0short', $match{'team_0'} -> [0] -> {shortname}, undef);
+	update($m, 'team1', uc($match{'team_1'} -> [0] -> {countrycode}), undef);
 	update($m, 'team1long', $match{'team_1'} -> [0] -> {name}, undef);
-	update($m, 'time', fixtime($match{'datematch'} -> [2]), undef);
-	update($m, 'date', fixtime2($match{'datematch'} -> [0]), undef);
-	
-	update($m, 'score', $match{'score'} -> [2], 
-		" Seis: " . team0($m) ." $match{'score'}->[2] " . team1($m),
-		" Seis: " . team0($m) ." $match{'score'}->[2] " . team1($m), sub { $seis ++ });
+	update($m, 'team1short', $match{'team_1'} -> [0] -> {shortname}, undef);
+	update($m, 'time', fixtime($mi -> [0] -> {'date'}), undef);
+	update($m, 'date', fixtime2($mi -> [0]), undef);
 
-	update($m, 'penalties', $match{'penalties'} -> [2], 
-		" Penaltid: " . team0($m) ." $match{'penalties'}->[2] " . team1($m),
-		" Penaltid: " . team0($m) ." $match{'penalties'}->[2] " . team1($m), sub { $seis ++ });
+	my $phase = $match{'maxphase'} -> [0] -> {'live'};
+	my $score = trim($match{'score'} -> [2]);
+	$score = undef if $phase < 0;
+
+	update($m, 'score', $score,
+		" Seis: " . team0($m) ." $score " . team1($m),
+		" Seis: " . team0($m) ." $score " . team1($m), sub { $seis ++ });
+
+	my $penalties = trim($match{'penalties'} -> [2]);
+	update($m, 'penalties', $penalties,
+			" Penaltid: " . team0($m) ." $penalties " . team1($m),
+			" Penaltid: " . team0($m) ." $penalties " . team1($m), sub { $seis ++ });
 
 	update($m, 'phase', $match{'maxphase'} -> [0] -> {'live'}, undef);
 #		"Faas: " . $match{'maxphase'} -> [0] -> {'live'});
 
-	my $phase = $match{'maxphase'} -> [0] -> {'live'};
 	if (gameover($m)) {
 		$next{$m} = 'never';
 	} elsif ($phase > -1) {
@@ -735,6 +808,84 @@ sub parse_matchinfo {
 	return $m;
 }
 
+sub trim {
+	my $x = shift;
+	return undef unless defined($x);
+	$x =~ s/^\s+//;
+	$x =~ s/\s+$//;
+	$x =~ s/\n//;
+	$x = undef if $x =~ /^\s*$/;
+	$x;
+}
+
+sub parse_feeds {
+	my $feeds = shift;
+	my $m = shift;
+
+	my $feed;
+	for $feed (@{$feeds}) {
+		next unless ref($feed) eq 'ARRAY';
+		my $type = $feed -> [0] -> {'type'};
+		next unless exists $feeds{$type};
+		my $timestamp = $feed -> [0] -> {'timestamp'};
+		next unless defined($timestamp) && $timestamp > 0;
+		next if defined($info -> {$m} -> {$type . '_timestamp'}) 
+			&& $info -> {$m} -> {$type . '_timestamp'} eq $timestamp;
+		&{$feeds{$type}}($m, $info -> {$m} -> {$type . '_timestamp'});
+		update($m, $type . '_timestamp', $timestamp);
+	}
+}
+
+sub fetch_stats {
+	my $m = shift;
+	my $old_timestamp = shift;
+	print "Fetching stats for $m\n";
+
+	my $uri = '';
+
+	$old_timestamp = '' unless defined($old_timestamp);
+
+	my $response = $ua -> request(HTTP::Request->new(GET =>
+		$uri = $req{$m} . 'stats.xml?ign=' . $old_timestamp));
+
+	print "stats request '$uri'\n";
+	if ($response -> is_success) {
+		parse_stats($m, $response->content);
+		save_state(1);
+		if (time < $last_save + 1200) {
+			save_state();
+			$last_save = time();
+		}
+	} else {
+		print STDERR "$uri: ", $response->status_line, "\n";
+	}
+}
+
+sub fetch_events {
+	my $m = shift;
+	my $old_timestamp = shift;
+	print "Fetching events for $m\n";
+
+	my $uri = '';
+
+	$old_timestamp = '' unless defined($old_timestamp);
+
+	my $response = $ua -> request(HTTP::Request->new(GET =>
+		$uri = $req{$m} . 'allMatchEvents.xml?ign=' . $old_timestamp));
+
+	print "stats request '$uri'\n";
+	if ($response -> is_success) {
+		parse_allEvents($m, $response->content);
+		save_state(1);
+		if (time < $last_save + 1200) {
+			save_state();
+			$last_save = time();
+		}
+	} else {
+		print STDERR "$uri: ", $response->status_line, "\n";
+	}
+}
+
 sub update_stats {
 	my $m = shift;
 	my $t1 = shift;
@@ -742,16 +893,25 @@ sub update_stats {
 	my $key = shift;
 	my $legend = shift;
 
+	$t1 -> {$key} = trim($t1 -> {$key});
+	$t2 -> {$key} = trim($t2 -> {$key});
+
+	return unless defined($t1 -> {$key}) && defined($t2 -> {$key});
+
 	if (ref($stats -> {$m}) ne 'HASH') {
-		$stats -> {$m} = {};
+		my %h : shared;
+		$stats -> {$m} = \%h;
 	}
 
+	my $new = 0;
 	if (ref($stats -> {$m} -> {$key}) ne 'ARRAY') {
-		$stats -> {$m} -> {$key} = [];
+		my @l : shared;
+		$stats -> {$m} -> {$key} = \@l;
+		$new = 1;
 	}
 
-	if (($stats -> {$m} -> {$key} -> [0] != $t1 -> {$key}) ||
-		($stats -> {$m} -> {$key} -> [1] != $t2 -> {$key})) {
+	if ($new || ($stats -> {$m} -> {$key} -> [0] ne $t1 -> {$key}) ||
+		($stats -> {$m} -> {$key} -> [1] ne $t2 -> {$key})) {
 		$stats -> {$m} -> {$key} -> [0] = $t1 -> {$key};
 		$stats -> {$m} -> {$key} -> [1] = $t2 -> {$key};
 		$stats -> {$m} -> {$key} -> [2] =
@@ -768,11 +928,12 @@ sub parse_statistics {
 	my $s = shift;
 	my $m = shift;
 
-	my $t1 = $s -> [2];
-	my $t2 = $s -> [4];
+	my @t = grep { ref($_) eq 'ARRAY' } @{$s};
 
-	$t1 = { map { ref($_) eq 'ARRAY' ? $_ -> [2] : $_ } @{$s -> [2]}[1 .. $#{$s -> [2]}] };
-	$t2 = { map { ref($_) eq 'ARRAY' ? $_ -> [2] : $_ } @{$s -> [4]}[1 .. $#{$s -> [4]}] };
+	my ($t1, $t2);
+
+	$t1 = { map { ref($_) eq 'ARRAY' ? $_ -> [2] : $_ } @{$t[0]}[1 .. $#{$t[0]}] };
+	$t2 = { map { ref($_) eq 'ARRAY' ? $_ -> [2] : $_ } @{$t[1]}[1 .. $#{$t[1]}] };
 
 	update_stats($m, $t1, $t2, 'ballpossession',	'Palli valdamine: ');
 	update_stats($m, $t1, $t2, 'corners',		'Nurgalööke:      ');
@@ -790,6 +951,11 @@ sub parse_statistics {
 sub parse_events {
 	my $me = shift;
 	my $m = shift;
+
+	if (ref($events -> {$m}) ne 'HASH') {
+		my %h :shared;
+		$events -> {$m} = \%h;
+	}
 
 	while (scalar(@{$me}) > 1) {
 		parse_event(pop @{$me}, $m);
@@ -811,25 +977,27 @@ sub parse_event {
 	my $e = shift;
 	my $m = shift;
 
-	my $o = { 'id' => $e -> [0] -> {id} };
+	my %h : shared = ('id' => $e -> [0] -> {id} );
 
+	my $o = \%h;
 
 	return if (ref($events -> {$m} -> {$o -> {id}}) eq 'HASH');
 
 	my %m = @{$e}[1 .. $#{$e}];
+
 	$o -> {'code'} = $e -> [0] -> {code};
-	$o -> {'time'} = $m{'time'} -> [0] -> {'min'} . ':' .
-		sprintf("%02d", $m{'time'} -> [0] -> {'sec'}) . 
-		($m{'time'} -> [2] ? ' (' . $m{'time'} -> [2] . ')' : '');
-	$o -> {'desc'} = $m{'description'} -> [2];
-	$o -> {'comm'} = $m{'comment'} -> [2];
+	$o -> {'time'} = $e -> [0] -> {'min'} . ':' .
+		sprintf("%02d", $e -> [0] -> {'sec'}) . 
+		($e -> [0] -> {timedisplay} ? ' (' . $e -> [0] -> {timedisplay} . ')' : '');
+	$o -> {'desc'} = $m{'descr'} -> [2] if defined($m{'descr'});
+#	$o -> {'comm'} = $m{'comment'} -> [2];
 
 #	print $o -> {'code'} . ' @ ' . $o -> {'time'} . ', d: "' . $o -> {'desc'} . '", c: "' .
 #		$o -> {'comm'} . '"' . "\n";
 
 	if ($o -> {'desc'}) {
 		#lock @news;
-		push @news, team0($m) . '-' . team1($m) . ': ' .$o -> {'time'} . ': ' . $o -> {'desc'};
+#		push @news, team0($m) . '-' . team1($m) . ': ' .$o -> {'time'} . ': ' . $o -> {'desc'};
 	}
 
 	$events -> {$m} -> {$o -> {id}} = $o;
