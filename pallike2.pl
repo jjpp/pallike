@@ -1008,7 +1008,7 @@ sub parse_event {
 
 	if ($o -> {'desc'}) {
 		#lock @news;
-#		push @news, team0($m) . '-' . team1($m) . ': ' .$o -> {'time'} . ': ' . $o -> {'desc'};
+		push @news, team0($m) . '-' . team1($m) . ': ' .$o -> {'time'} . ': ' . $o -> {'desc'};
 	}
 
 	$events -> {$m} -> {$o -> {id}} = $o;
