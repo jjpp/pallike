@@ -15,6 +15,7 @@ use Unicode::String qw{ latin1 utf8 };
 
 use vars qw{  $ua $parser };
 $ua = LWP::UserAgent->new;
+$ua -> timeout(10);
 $parser = new XML::Parser(Style => 'Tree');
 
 use vars qw{ $info $events $stats @games %next @news $quit @local_news %channels @bcast $state $seis %topic %smslist $topiccmd };
@@ -70,13 +71,15 @@ $SIG{'TERM'} = $SIG{'INT'};
 
 print "Starting main loop..\n";
 while (1) {
-	my $time = time() - 10;
-	if ($last_update < $time) { 
+	my $time = time() - 40;
+	if ($last_update < $time) {
+		finish_thread ($updater, 'updater');
 		print "Starting update thread..\n";
 		$updater = threads->create("update_thread");
 	}
 
 	if ($last_irc < $time) {
+		finish_thread ($irc_thread, 'IRC thread');
 		print "Starting IRC thread..\n";
 		$irc_thread = threads->create("irc_thread");
 	}
@@ -91,6 +94,14 @@ $irc_thread -> join();
 print "Threads finished. Exiting..\n";
 
 exit 0;
+
+sub finish_thread {
+	my $t = shift;
+	my $name = shift;
+	return unless defined($t);
+	print "Finishing dead $name..\n";
+	$t -> join();
+}
 
 sub irc_thread {
 	my $irc = new Net::IRC;
