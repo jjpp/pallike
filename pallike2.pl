@@ -110,7 +110,8 @@ sub irc_thread {
 		Nick 	=> 'pallike',
 		Server	=> 'irc.estpak.ee',
 		Port	=> 6667,
-		Ircname	=> 'jalgpallikoll'
+		Ircname	=> 'jalgpallikoll',
+		Pacing	=> 2.1,
 	);
 
 	$SIG{'INT'} = sub { $quit ++ };
@@ -132,65 +133,68 @@ sub irc_thread {
 	print "Starting IRC loop..\n";
 	while (1) {
 		$last_irc = time();
-		if (scalar (@bcast) > 0) {
-			if ($state) {
-				eval($state);
+		{
+			lock(@bcast);
+			if (scalar (@bcast) > 0) {
+				refresh();
+				
+				my $msg = shift @bcast;
+				foreach (grep { $channels{$_} } keys %channels) {
+					$conn -> privmsg($_, utf8($msg) -> latin1);
+				}
+				select(undef, undef, undef, 0.1);
 			}
-			
-			my $msg = shift @bcast;
-			foreach (grep { $channels{$_} } keys %channels) {
-				$conn -> privmsg($_, utf8($msg) -> latin1);
-			}
-			select(undef, undef, undef, 0.1);
 		}
 
-		if ($seis > 0) {
-			if ($state) {
-				eval($state);
-			}
-			
-			my $topic_pref = join(", ", map { seis_topic($_); } get_games());
-			print "topits: '$topic_pref', $seis\n";
-			
-			foreach (grep { $channels{$_} } keys %channels) {
-				my @topic = $conn -> topic($_);
-				print "Channel $_, topic: '$topic{$_}'\n";
-				my $topic = $topic{$_};
-				my $oldtopic = $topic;
-				$topic =~ s/^([^\|]+)\|/$topic_pref \|/;
-				if ($oldtopic ne $topic) {
-					print "Trying to set new topic..\n";
-					$conn -> topic($_, $topic);
+		{	
+			lock($seis);
+			if ($seis > 0) {
+				refresh();
+				
+				my $topic_pref = join(", ", map { seis_topic($_); } get_games());
+				print "topits: '$topic_pref', $seis\n";
+				
+				foreach (grep { $channels{$_} } keys %channels) {
+					my @topic = $conn -> topic($_);
+					print "Channel $_, topic: '$topic{$_}'\n";
+					my $topic = $topic{$_};
+					my $oldtopic = $topic;
+					$topic =~ s/^([^\|]+)\|/$topic_pref \|/;
+					if ($oldtopic ne $topic) {
+						print "Trying to set new topic..\n";
+						$conn -> topic($_, $topic);
+					}
 				}
-			}
 
-#			if ($topiccmd == 0) {
-				sendsms($topic_pref, grep {$smslist{$_}} keys %smslist);
-				$topiccmd = 0;
-#			}
+	#			if ($topiccmd == 0) {
+					sendsms($topic_pref, grep {$smslist{$_}} keys %smslist);
+					$topiccmd = 0;
+	#			}
 
-			$seis --;
-		} 
-		
-		if (scalar (@news) + scalar(@local_news) > 0) {
-			if ($state) {
-				eval($state);
+				$seis --;
+			} 
+		}
+	
+		{
+			lock(@news);	
+			if (scalar (@news) + scalar(@local_news) > 0) {
+				refresh();
+					
+				if (scalar(@news) > 0) {
+					#lock @news;
+					$_ = shift @news;
+				} else {
+					$_ = shift @local_news;
+				}
+				if (ref($_) ne 'ARRAY') {
+					print "to $ic: $_\n";
+					$conn -> privmsg($ic, utf8($_) -> latin1);
+				} else {
+					print "to: " . $_ -> [0] . " : '$_->[1]'\n";
+					$conn -> privmsg($_->[0], utf8($_->[1]) -> latin1);
+				}
+				select(undef, undef, undef, 0.1);
 			}
-			
-			if (scalar(@news) > 0) {
-				#lock @news;
-				$_ = shift @news;
-			} else {
-				$_ = shift @local_news;
-			}
-			if (ref($_) ne 'ARRAY') {
-				print "to $ic: $_\n";
-				$conn -> privmsg($ic, utf8($_) -> latin1);
-			} else {
-				print "to: " . $_ -> [0] . " : '$_->[1]'\n";
-				$conn -> privmsg($_->[0], utf8($_->[1]) -> latin1);
-			}
-			select(undef, undef, undef, 0.1);
 		}
 
 #		if ($updater -> done()) {
@@ -209,6 +213,13 @@ sub irc_thread {
 	}
 
 	print "IRC loop exited..\n";
+}
+
+sub refresh {
+	lock $state;
+	if ($state) {
+		eval($state);
+	}
 }
 
 sub sendsms {
@@ -272,10 +283,17 @@ sub update_thread {
 	
 		next if (time < $next{$req});
 		next unless defined($req{$req});
-		
+	
+		{	
+			if (time < $last_save + 300) {
+				save_state();
+				$last_save = time();
+			}
+		}
+
 		my $uri;
 		my $response = $ua -> request(HTTP::Request->new(GET =>
-			$uri = $req{$req} . 'matchIndex.xml?ign=' . $info -> {$req} -> {'last_update'}));
+			$uri = $req{$req} . 'matchIndex.xml')); # ?ign=' . $info -> {$req} -> {'last_update'}));
 		if ($response -> is_success) {
 #			if (length($response -> content) != $last_size{$req}) {
 #				$last_size{$req} = length($response -> content);
@@ -283,7 +301,7 @@ sub update_thread {
 #			}
 			parse_xml($response->content);
 			save_state(1);
-			if (time < $last_save + 1200) {
+			if (time < $last_save + 180) {
 				save_state();
 				$last_save = time();
 			}
@@ -325,8 +343,8 @@ sub get_games_real {
 	}
 
 	my $old = setlocale(LC_TIME, "C");
-	my $today = strftime("%d %B %Y", gmtime(time));
-	my $today_date = strftime("%Y%m%d", gmtime(time));
+	my $today = strftime("%d %B %Y", localtime(time));
+	my $today_date = strftime("%Y%m%d", localtime(time));
 	setlocale(LC_TIME, $old);
 	
 	if (uc($arg) eq 'FUT') {
@@ -359,7 +377,13 @@ sub get_games_real {
 sub get_games {
 	my @t = get_games_real(@_);
 	print "get_games_real gave: @t\n";
-	return @t;
+	return sort_by_time @t;
+}
+
+sub sort_by_time {
+	sort { $info -> {$a} -> {'date'} eq $info -> {$b} -> {'date'}
+			 ? $info -> {$a} -> {'time'} cmp $info -> {$b} -> {'time'}
+				: $info -> {$a} -> {'date'} cmp $info -> {$b} -> {'date'} } @_;
 }
 
 sub gamepref {
@@ -447,10 +471,7 @@ sub on_msg {
 
 	next unless /^!/;
 
-	if ($state) {
-		print "Updating local state..\n";
-		eval($state);
-	}
+	refresh();
 
 	print "cmd: '$_'\n";
 	my @cmd = split(' ', $_);
@@ -490,10 +511,10 @@ sub on_msg {
 		},
 		'!today' => sub {
 			my $old = setlocale(LC_TIME, "C");
-			my $today = strftime("%d %B %Y", gmtime(time));
+			my $today = strftime("%d %B %Y", localtime(time));
 			setlocale(LC_TIME, $old);
 			print "täna on: '$today'\n";
-			foreach (grep { $info -> {$_} -> {'time'} =~ /$today/i } @games) {
+			foreach (sort_by_time (grep { $info -> {$_} -> {'time'} =~ /$today/i } @games)) {
 				reply $resp, seis($_);
 			}
 		},
@@ -563,6 +584,7 @@ sub on_msg {
 				} (keys %pts))));
 		},
 		'!topic' => sub {
+			lock($seis);
 			print "Updating topic..\n";
 			$seis++;
 			$topiccmd ++;
@@ -601,6 +623,7 @@ sub save_state {
 	my $internal_mode = shift;
 
 	if ($internal_mode) {
+		lock $state;
 		$state = Data::Dumper -> Dump([$info, $events, $stats], 
 			[qw{ $main::info $main::events $main::stats }]);
 	} else {
@@ -612,8 +635,8 @@ sub save_state {
 		
 		print STATE "\%next = \%{\$tmp1};\n";
 		print STATE "\@games = \@{\$tmp2};\n";
-		print STATE "\%smslist = \%{\$tmp3};\n";
 		print STATE "share(\%smslist);\n";
+		print STATE "\%smslist = \%{\$tmp3};\n";
 		foreach ('info', 'events', 'stats', 'next') {
 	#		print STATE "share_r(\$main::$_);\n";
 		}
@@ -635,8 +658,8 @@ sub parse_xml {
 #	print "$m.last_update: $last_update\n";
 	update ($m, 'last_update', $last_update);
 
+	parse_events(el($tree, 'matchmbm', 'allevents'), $m);
 	parse_feeds(el($tree, 'matchmbm', 'feeds'), $m);
-#	parse_events(el('matchmbm', 'allevents'), $m);
 #	parse_statistics($ -> [1] -> [6], $m);
 }
 
@@ -695,12 +718,13 @@ sub update {
 		&& (!defined($info -> {$match} -> {$key}) 
 			|| $info -> {$match} -> {$key} ne $val)
 		&& ($news || $bcast)) {
-		##lock @news;
 		if ($news) {
+			lock @news;
 			push @news, $news;
 		}
 
 		if ($bcast) {
+			lock @bcast;
 			push @bcast, $bcast;
 		}
 
@@ -736,6 +760,7 @@ sub fixtime {
 	s/^16:/17:/;
 	s/^15:/16:/;
 	s/^14:/15:/;
+	s/^13:/14:/;
 
 	$_;
 }
@@ -752,8 +777,15 @@ sub fixtime2 {
 
 sub gameover {
 	my $m = shift;
-	my $today = strftime("%Y%m%d", gmtime(time));	
+	my $today = strftime("%Y%m%d", localtime(time));	
 	return $info -> {$m} -> {'date'} < $today;
+}
+
+sub update_seis {
+	print "seis muutus.";
+	save_state(1);
+	lock $seis;
+        $seis ++;	
 }
 
 sub parse_matchinfo {
@@ -796,12 +828,12 @@ sub parse_matchinfo {
 
 	update($m, 'score', $score,
 		" Seis: " . team0($m) ." $score " . team1($m),
-		" Seis: " . team0($m) ." $score " . team1($m), sub { $seis ++ });
+		" Seis: " . team0($m) ." $score " . team1($m), \&update_seis);
 
 	my $penalties = trim($match{'penalties'} -> [2]);
 	update($m, 'penalties', $penalties,
 			" Penaltid: " . team0($m) ." $penalties " . team1($m),
-			" Penaltid: " . team0($m) ." $penalties " . team1($m), sub { $seis ++ });
+			" Penaltid: " . team0($m) ." $penalties " . team1($m), \&update_seis);
 
 	update($m, 'phase', $match{'maxphase'} -> [0] -> {'live'}, undef);
 #		"Faas: " . $match{'maxphase'} -> [0] -> {'live'});
@@ -815,6 +847,8 @@ sub parse_matchinfo {
 	}
 
 #	print STDERR "$m: $phase: seconds to next check: " . ($next{$m} - time()) . "\n";
+
+	save_state(1);
 
 	return $m;
 }
@@ -842,8 +876,9 @@ sub parse_feeds {
 		next unless defined($timestamp) && $timestamp > 0;
 		next if defined($info -> {$m} -> {$type . '_timestamp'}) 
 			&& $info -> {$m} -> {$type . '_timestamp'} eq $timestamp;
-		&{$feeds{$type}}($m, $info -> {$m} -> {$type . '_timestamp'});
-		update($m, $type . '_timestamp', $timestamp);
+		if (&{$feeds{$type}}($m, $info -> {$m} -> {$type . '_timestamp'})) {
+			update($m, $type . '_timestamp', $timestamp);
+		}
 	}
 }
 
@@ -863,13 +898,16 @@ sub fetch_stats {
 	if ($response -> is_success) {
 		parse_stats($m, $response->content);
 		save_state(1);
-		if (time < $last_save + 1200) {
+		if (time < $last_save + 120) {
 			save_state();
 			$last_save = time();
 		}
 	} else {
 		print STDERR "$uri: ", $response->status_line, "\n";
+		return 0;
 	}
+
+	1;
 }
 
 sub fetch_events {
@@ -882,19 +920,22 @@ sub fetch_events {
 	$old_timestamp = '' unless defined($old_timestamp);
 
 	my $response = $ua -> request(HTTP::Request->new(GET =>
-		$uri = $req{$m} . 'allMatchEvents.xml?ign=' . $old_timestamp));
+		$uri = $req{$m} . 'allMatchEvents.xml')); # ?ign=' . $old_timestamp));
 
 	print "stats request '$uri'\n";
 	if ($response -> is_success) {
 		parse_allEvents($m, $response->content);
 		save_state(1);
-		if (time < $last_save + 1200) {
+		if (time < $last_save + 120) {
 			save_state();
 			$last_save = time();
 		}
 	} else {
 		print STDERR "$uri: ", $response->status_line, "\n";
+		return 0;
 	}
+
+	1;
 }
 
 sub update_stats {
@@ -930,8 +971,9 @@ sub update_stats {
 				$t1 -> {$key}, $t2 -> {$key}) .
 				team1($m);
 
-		#lock @news;
+		lock @news;
 		push @news, $stats -> {$m} -> {$key} -> [2];
+		print "statsiparser: " . $stats -> {$m} -> {$key} -> [2] . "\n";
 	}
 }
 
@@ -983,10 +1025,13 @@ sub parse_events {
 # 6 - player (team) "has a shot b#locked"
 # 7 -
 # 
+# 11 - player "commits a foul"
 
 sub parse_event {
 	my $e = shift;
 	my $m = shift;
+
+	return unless ref($e) eq 'ARRAY';
 
 	my %h : shared = ('id' => $e -> [0] -> {id} );
 
@@ -995,6 +1040,9 @@ sub parse_event {
 	return if (ref($events -> {$m} -> {$o -> {id}}) eq 'HASH');
 
 	my %m = @{$e}[1 .. $#{$e}];
+	
+	return if scalar(keys %{$e -> [0]}) == 1; # <e id=blaah/>
+
 
 	$o -> {'code'} = $e -> [0] -> {code};
 	$o -> {'time'} = $e -> [0] -> {'min'} . ':' .
@@ -1003,12 +1051,13 @@ sub parse_event {
 	$o -> {'desc'} = $m{'descr'} -> [2] if defined($m{'descr'});
 #	$o -> {'comm'} = $m{'comment'} -> [2];
 
-#	print $o -> {'code'} . ' @ ' . $o -> {'time'} . ', d: "' . $o -> {'desc'} . '", c: "' .
-#		$o -> {'comm'} . '"' . "\n";
+	print "ep: " . $o -> {'code'} . ' @ ' . $o -> {'time'} . ', d: "' . $o -> {'desc'} . '", c: "' .
+		$o -> {'comm'} . '"' . "\n";
 
 	if ($o -> {'desc'}) {
-		#lock @news;
+		lock @news;
 		push @news, team0($m) . '-' . team1($m) . ': ' .$o -> {'time'} . ': ' . $o -> {'desc'};
+		print "eventparser: " . team0($m) . '-' . team1($m) . ': ' .$o -> {'time'} . ': ' . $o -> {'desc'} . "\n";
 	}
 
 	$events -> {$m} -> {$o -> {id}} = $o;
