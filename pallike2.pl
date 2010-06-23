@@ -377,7 +377,9 @@ sub get_games_real {
 sub get_games {
 	my @t = get_games_real(@_);
 	print "get_games_real gave: @t\n";
-	return sort_by_time @t;
+	my @x = sort_by_time(@t);
+	print "sorted: @x\n";
+	return sort_by_time(@t);
 }
 
 sub sort_by_time {
@@ -551,6 +553,7 @@ sub on_msg {
 		'!group' => sub {
 			my %pts = ();
 			my %goals = ();
+			my %diff = ();
 			foreach (get_games(@args)) {
 				print "$_: " . $info -> {$_} -> {score} . "\n";
 				next unless $info -> {$_} -> {score} =~ /^\d+:\d+$/;
@@ -558,6 +561,12 @@ sub on_msg {
 				print "@d\n";
 				$goals{team0($_)} += $d[0];
 				$goals{team1($_)} += $d[1];
+
+				$diff{team0($_)} += $d[0];
+				$diff{team0($_)} -= $d[1];
+				$diff{team1($_)} += $d[1];
+				$diff{team1($_)} -= $d[0];
+
 				
 				if ($d[0] == $d[1]) {
 					$pts{team0($_)} ++;
@@ -573,13 +582,16 @@ sub on_msg {
 
 			print "pts: " . join (", ", map { "$_: $pts{$_}" } keys %pts) . "\n";
 			print "goals: " . join (", ", map { "$_: $goals{$_}" } keys %goals) . "\n";
+			print "diff: " . join (", ", map { "$_: $diff{$_}" } keys %diff) . "\n";
 
 			reply ($resp,
 				join(", ", map { 
-					$_ . ": " . $pts{$_} . " (" . $goals{$_} . ")" 
+					$_ . ": " . $pts{$_} . " (" . $diff{$_} . ", " . $goals{$_} . ")" 
 				} (sort {
 					($pts{$a} == $pts{$b}) ?
-						$goals{$b} <=> $goals{$a} 
+						$diff{$a} == $diff{$b} ?
+							$goals{$b} <=> $goals{$a} 
+						:	$diff{$b} <=> $diff{$a}
 					:	$pts{$b} <=> $pts{$a};
 				} (keys %pts))));
 		},
