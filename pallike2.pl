@@ -19,7 +19,7 @@ $ua -> timeout(10);
 $parser = new XML::Parser(Style => 'Tree');
 
 use vars qw{ $info $events $stats @games %next @news $quit @local_news %channels @bcast $state $seis %topic %smslist $topiccmd };
-use vars qw{ $last_update $last_irc $updater $irc_thread %req $last_save};
+use vars qw{ $last_update $last_irc $updater $irc_thread %req $last_save $lastsms };
 
 share(@games);
 share(@news);
@@ -31,6 +31,7 @@ share($seis);
 share($last_update);
 share($last_irc);
 share %next;
+share($lastsms);
 
 $info = &share({});
 $events = &share({});
@@ -230,10 +231,16 @@ sub sendsms {
 		return;
 	}
 
+	if ($lastsms eq $txt) {
+		print "selline sms on juba saadetud?";
+		return;
+	}
+
 	print "Sending email to: @_ : '$txt'\n";
 	open (SMS, "|mail -s 'jalgpallisms' @_");
 	print SMS "$txt";
 	close (SMS);
+	$lastsms = $txt;
 }
 
 sub matchday {
