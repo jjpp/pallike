@@ -857,6 +857,10 @@ sub parse_matchinfo {
 	update($m, 'phase', $match{'maxphase'} -> [0] -> {'live'}, undef);
 #		"Faas: " . $match{'maxphase'} -> [0] -> {'live'});
 
+	update($m, 'infoarea', $match{'infoArea'} -> [2], undef);
+#	if ($phase > 4 && $info -> {$m} -> {'infoarea'} =~ ) {
+#	}
+
 	if (gameover($m)) {
 		$next{$m} = 'never';
 	} elsif ($phase > -1) {
