@@ -548,7 +548,9 @@ sub on_msg {
 		},
 		'!refresh' => sub {
 			foreach (get_games(@args)) {
-				print "$_ next was in " . ($next{$_} - time) . " seconds\n";
+				print "$_ next was " . 
+					($next{$_} eq 'never' ? 'never' : "in " . ($next{$_} - time) . " seconds")
+					 . "\n";
 				$next{$_} = time() - 1;
 			}
 			reply $resp, "ok";
@@ -850,16 +852,22 @@ sub parse_matchinfo {
 		" Seis: " . team0($m) ." $score " . team1($m), \&update_seis);
 
 	my $penalties = trim($match{'penalties'} -> [2]);
-	update($m, 'penalties', $penalties,
-			" Penaltid: " . team0($m) ." $penalties " . team1($m),
-			" Penaltid: " . team0($m) ." $penalties " . team1($m), \&update_seis);
+	if ($phase <= 4) {
+		update($m, 'penalties', $penalties,
+				" Penaltid: " . team0($m) ." $penalties " . team1($m),
+				" Penaltid: " . team0($m) ." $penalties " . team1($m), \&update_seis);
+	}
 
 	update($m, 'phase', $match{'maxphase'} -> [0] -> {'live'}, undef);
 #		"Faas: " . $match{'maxphase'} -> [0] -> {'live'});
 
 	update($m, 'infoarea', $match{'infoArea'} -> [2], undef);
-#	if ($phase > 4 && $info -> {$m} -> {'infoarea'} =~ ) {
-#	}
+	if ($phase > 4 && $info -> {$m} -> {'infoarea'} =~ / (\d+:\d+) PSO$/) {
+		$penalties = $1;
+		update($m, 'penalties', $penalties,
+				" Penaltid: " . team0($m) ." $penalties " . team1($m),
+				" Penaltid: " . team0($m) ." $penalties " . team1($m), \&update_seis);
+	}
 
 	if (gameover($m)) {
 		$next{$m} = 'never';
