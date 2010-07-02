@@ -247,6 +247,9 @@ sub matchday {
 	my $date = shift;
 	my $game = shift;
 
+	return 20 if $date =~ /^20100702/;
+	return 21 if $date =~ /^20100703/;
+
 #	return 17 if ($game eq 1059192);
 #	return 18 if ($game eq 1059193);
 #	return 19 if ($game eq 1059194);
@@ -350,8 +353,8 @@ sub get_games_real {
 	}
 
 	my $old = setlocale(LC_TIME, "C");
-	my $today = strftime("%d %B %Y", localtime(time));
-	my $today_date = strftime("%Y%m%d", localtime(time));
+	my $today = strftime("%d %B %Y", localtime(time - 7200));
+	my $today_date = strftime("%Y%m%d", localtime(time - 7200));
 	setlocale(LC_TIME, $old);
 	
 	if (uc($arg) eq 'FUT') {
@@ -514,18 +517,24 @@ sub on_msg {
 			}
 		},
 		'!seis' => sub {
+			my $count = 0;
 			foreach (get_games(@args)) {
 				reply $resp, seis($_);
+				$count++;
 			}
+			reply $resp, "Kokku $count mäng" . ($count == 1 ? "" : "u");
 		},
 		'!today' => sub {
 			my $old = setlocale(LC_TIME, "C");
 			my $today = strftime("%d %B %Y", localtime(time));
 			setlocale(LC_TIME, $old);
 			print "täna on: '$today'\n";
+			my $count = 0;
 			foreach (sort_by_time (grep { $info -> {$_} -> {'time'} =~ /$today/i } @games)) {
 				reply $resp, seis($_);
+				$count++;
 			}
+			reply $resp, "Kokku $count mäng" . ($count == 1 ? "" : "u");
 		},
 		'!shots' => sub {
 			my $g;
@@ -798,7 +807,7 @@ sub fixtime2 {
 
 sub gameover {
 	my $m = shift;
-	my $today = strftime("%Y%m%d", localtime(time));	
+	my $today = strftime("%Y%m%d", localtime(time - (2*3600))); # 2h grace-aega
 	return $info -> {$m} -> {'date'} < $today;
 }
 
@@ -844,6 +853,7 @@ sub parse_matchinfo {
 	update($m, 'date', fixtime2($mi -> [0]), undef);
 
 	my $phase = $match{'maxphase'} -> [0] -> {'live'};
+	my $playedPhases = $match{'maxphase'} -> [0] -> {'numPlayedPhases'};
 	my $score = trim($match{'score'} -> [2]);
 	$score = undef if $phase < 0;
 
@@ -867,12 +877,17 @@ sub parse_matchinfo {
 		update($m, 'penalties', $penalties,
 				" Penaltid: " . team0($m) ." $penalties " . team1($m),
 				" Penaltid: " . team0($m) ." $penalties " . team1($m), \&update_seis);
+	} elsif ($phase == 5 and $playedPhases == 4) { # PSO 
+		$penalties = trim($match{'time'} -> [2]);
+		update($m, 'penalties', $penalties,
+				" PSO: " . team0($m) ." $penalties " . team1($m),
+				" PSO: " . team0($m) ." $penalties " . team1($m), \&update_seis);
 	}
 
 	if (gameover($m)) {
 		$next{$m} = 'never';
 	} elsif ($phase > -1) {
-		$next{$m} = time() + 10 + int(rand(10))
+		$next{$m} = time() + 5 + int(rand(8))
 	} else {
 		$next{$m} = time() + 5*60 + int(rand(3*60));
 	}
