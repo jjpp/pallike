@@ -249,6 +249,10 @@ sub matchday {
 
 	return 20 if $date =~ /^20100702/;
 	return 21 if $date =~ /^20100703/;
+	return 22 if $date =~ /^20100706/;
+	return 23 if $date =~ /^20100707/;
+	return 24 if $date =~ /^20100710/;
+	return 25 if $date =~ /^20100711/;
 
 #	return 17 if ($game eq 1059192);
 #	return 18 if ($game eq 1059193);
@@ -527,10 +531,11 @@ sub on_msg {
 		'!today' => sub {
 			my $old = setlocale(LC_TIME, "C");
 			my $today = strftime("%d %B %Y", localtime(time));
+			$today =~ s/^0//;
 			setlocale(LC_TIME, $old);
 			print "täna on: '$today'\n";
 			my $count = 0;
-			foreach (sort_by_time (grep { $info -> {$_} -> {'time'} =~ /$today/i } @games)) {
+			foreach (sort_by_time (grep { $info -> {$_} -> {'time'} =~ / $today/i } @games)) {
 				reply $resp, seis($_);
 				$count++;
 			}
